@@ -1,0 +1,22 @@
+{
+  "name": "socialblade-scrapper",
+  "version": "1.0.0",
+  "description": "Instagram statistics scraper for Social Blade",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "puppeteer": "^19.11.1",
+    "xlsx": "^0.18.5"
+  },
+  "keywords": [
+    "scraping",
+    "instagram",
+    "social-blade",
+    "statistics"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
