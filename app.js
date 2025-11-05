@@ -12,120 +12,8 @@ function formatFollowers(numStr) {
   return numStr;
 }
 
-const usernames = [
-  "infokejadian__semarang",
-  "semarangskyject",
-  "hangoutsemarang",
-  "dolan.semarang",
-  "semaranghitshitz",
-  "infokabarsalatiga",
-  "info.salatiga",
-  "infokejadiansemarang.new",
-  "infoevent_semarang",
-  "infokejadianungaran",
-  "infosemarangterkini",
-  "mahasiswasemarang.co",
-  "semaranginfo.id",
-  "curhatanundip",
-  "demakhariini",
-  "infodemakkita",
-  "explorekendal",
-  "liputan.kendal.terkini",
-  "infogrobogan.id",
-  "grobogan_raya",
-  "grobogantoday",
-  "pati.24jam",
-  "patinewscom",
-  "patiem_",
-  "patisakpore",
-  "mubeng_pati",
-  "patihits",
-  "explorekudus",
-  "kudusterkini_",
-  "infoseputarkudus",
-  "info.muria",
-  "infoseputarjepara",
-  "jeparahitzz",
-  "jeparakekinian",
-  "explorejepara",
-  "jeparasquad",
-  "jeparahariini",
-  "ini_blora",
-  "info_cepu",
-  "bloraupdates",
-  "rembangupdates",
-  "viralrembang",
-  "visitrembang",
-  "rembang.terkini",
-  "rembang.updates",
-  "info_rembang",
-  "asli.rembang",
-  "rembang24jam",
-  "explorerembang",
-  "sekitar.rembang",
-  "explorepekalongan",
-  "pekalonganpost",
-  "infopekalonganraya.id",
-  "infopekalongan_",
-  "pekalonganinfo",
-  "infotegal",
-  "exploretegal",
-  "dolantegal",
-  "seputar_brebes",
-  "brebeshitshitz",
-  "kabarpemalang",
-  "pemalang.update",
-  "inipemalang",
-  "batanginfo.id",
-  "batang.update",
-  "infobatang",
-  "jelajahsolo",
-  "event.solo",
-  "kabarsolo",
-  "iks_infokaresidenan solo",
-  "dolansolo",
-  "agendasolo",
-  "soloinfo_id",
-  "kliksolo",
-  "diskonsolo",
-  "agendasolo_id",
-  "agendasolo",
-  "info_kartasura",
-  "pawartoskartasura",
-  "surakartahits_",
-  "visit.surakarta",
-  "surakartakita",
-  "lensasurakarta",
-  "sekitartawangmangu",
-  "karanganyar_masa_kini",
-  "jelajahkaranganyar",
-  "wisata_tawangmangu",
-  "explorekabkaranganyar.id",
-  "karanganyarkita",
-  "karanganyar_masa_kini",
-  "tentangkaranganyar",
-  "sragenkita",
-  "icws_infocegatanwilayahsragen",
-  "sragenkerenn",
-  "repostwonogiri",
-  "wonogirikita",
-  "explore_wonogiri",
-  "kabarwonogiri.official",
-  "wonogiri_views",
-  "wonogiriterpopuler",
-  "kabarwonogiri.official",
-  "repostwonogiri",
-  "wonogiri_terkini",
-  "wonogiri.hits",
-  "wonogiri",
-  "sukoharjo_makmur",
-  "sukoharjokita",
-  "kabar_klaten",
-  "klatenkita",
-  "kabarklaten",
-  "boyolali_info",
-  "boyolalikita"
-]
+const usernamesFile = path.join(__dirname, 'usernames.txt');
+const usernames = fs.readFileSync(usernamesFile, 'utf8').split('\n').map(line => line.trim()).filter(Boolean);
 
 async function loadCookies(page) {
   const cookiesPath = path.join(__dirname, 'cookies.json');
@@ -170,62 +58,61 @@ async function scrapeOne(browser, username) {
     }
 
     const data = await page.evaluate(() => {
-      const root = document.querySelector('#socialblade-user-content') || document.body;
-      const elements = Array.from(root.querySelectorAll('*'));
-      const texts = elements.map(el => el.textContent.trim()).filter(t => t);
-
-      function findStat(labelRegexArray, valueRegex = /[\d,.%]+/) {
-        for (let i = 0; i < texts.length; i++) {
-          const t = texts[i];
-          if (labelRegexArray.some(r => r.test(t))) {
-            if (valueRegex.test(t)) return t;
-            for (let j = i + 1; j < Math.min(i + 5, texts.length); j++) {
-              if (valueRegex.test(texts[j])) return texts[j];
-            }
-          }
+      // Collect all text nodes under document.body
+      function getAllTextNodes() {
+        let walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+        let node, texts = [];
+        while (node = walker.nextNode()) {
+          const t = node.textContent.trim();
+          if (t) texts.push(t);
         }
-        return '';
+        return texts;
       }
 
-      const followersEl = document.querySelector('#instagram-stats-header-followers');
-      const postsEl = document.querySelector('#instagram-stats-header-uploads');
+      const texts = getAllTextNodes();
 
-      const followers =
-        followersEl?.textContent.trim() ||
-        findStat([/Followers?/i]);
+      // Find the string that contains all the stat labels in sequence
+      const patternLabels = [
+        'followers', 'following', 'media count', 'engagement rate', 'average likes', 'average comments'
+      ];
+      let statsString = texts.find(t =>
+        patternLabels.every(label => t.toLowerCase().includes(label))
+      );
 
-      const media =
-        postsEl?.textContent.trim() ||
-        findStat([/Posts?/i, /Uploads?/i, /Media Count/i]);
+      // If not found, fallback to joining all texts and searching in the big string
+      if (!statsString) {
+        const joined = texts.join('').toLowerCase();
+        if (patternLabels.every(label => joined.includes(label))) {
+          statsString = joined;
+        }
+      }
 
-      const engagementRate =
-        findStat([/Engagement Rate/i, /Engagement/i], /[\d,.]+%/) ||
-        '';
-
-      const avgLikes =
-        findStat([/Avg Likes/i, /Average Likes/i]) ||
-        '';
-
-      const avgComments =
-        findStat([/Avg Comments/i, /Average Comments/i]) ||
-        '';
+      // Extract values using regex
+      function extract(pattern) {
+        const match = statsString && statsString.match(pattern);
+        return match ? match[1] : '';
+      }
 
       return {
-        followers,
-        media,
-        engagementRate,
-        avgLikes,
-        avgComments
+        followers: extract(/followers\s*([\d,.KMB]+)/i),
+        following: extract(/following\s*([\d,.KMB]+)/i),
+        media: extract(/media count\s*([\d,.KMB]+)/i),
+        engagementRate: extract(/engagement rate\s*([\d.,]+%)/i),
+        avgLikes: extract(/average likes\s*([\d.,KMB]+)/i),
+        avgComments: extract(/average comments\s*([\d.,KMB]+)/i),
+        // statsString // for debugging
       };
     });
 
+    // console.log(`Scraped ${username}:`, data.statsString);
+
     return {
       username,
-      followers: extractNumber(data.followers),
-      engagement_rate: extractPercent(data.engagementRate),
-      media_count: extractNumber(data.media),
-      avg_likes: extractNumber(data.avgLikes),
-      avg_comments: extractNumber(data.avgComments),
+      followers: data.followers,
+      engagement_rate: data.engagementRate,
+      media_count: data.media,
+      avg_likes: data.avgLikes,
+      avg_comments: data.avgComments,
       success: true,
       error: ''
     };
